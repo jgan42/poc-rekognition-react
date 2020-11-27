@@ -1,26 +1,20 @@
-import React from 'react';
-import logo from './logo.svg';
-import './App.css';
+import React, { FC } from 'react';
+import firebase from 'firebase/app';
+import 'firebase/database';
+import { Home } from './pages/Home';
 
-function App() {
-  return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
-  );
-}
+firebase.initializeApp({
+  apiKey: 'AIzaSyBK0Qxvg1GL2lMa1gWyZGNmK_v0o25d6jc',
+  authDomain: 'poc-focuspoint.firebaseapp.com',
+  databaseURL: 'https://poc-focuspoint.firebaseio.com',
+  projectId: 'poc-focuspoint',
+  storageBucket: 'poc-focuspoint.appspot.com',
+  messagingSenderId: '484040658105',
+  appId: '1:484040658105:web:9f5995455813c0981a1f68',
+});
 
-export default App;
+export const App: FC = () => (
+  <div className="App">
+    <Home />
+  </div>
+);
