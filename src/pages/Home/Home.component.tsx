@@ -4,7 +4,7 @@ import { useGetObject } from '../../firebase/useGetObject';
 import { useGetList } from '../../firebase/useGetList';
 import { useStyles } from './styles';
 import { Config, ImageData } from './types';
-import { getFocusPoint, getWeighting } from './utils';
+import { getFocusPoint, parseList } from './utils';
 import { ConfigTable } from './ConfigTable';
 import { setValue } from '../../firebase/setValue';
 
@@ -20,92 +20,55 @@ export const Home: FC = () => {
     setConfig(dbConfig ? JSON.parse(JSON.stringify(dbConfig)) : {});
   }, [dbConfig]);
 
+  const parsedList = parseList(list, config);
+  const labels = parsedList.reduce((acc, { items }) => {
+    const newLabels = items.map((item) => item.type === "Labels" && item.name).filter(item => !!item);
+    return Array.from(new Set([...acc, ...(newLabels as string[])]));
+  }, config.Labels?.excluded || []).sort();
+
   console.log('dbConfig, list', config, list);
+  console.log('parsedList', parsedList);
+
   const handleSave = (config: Config) => setValue('config', config);
 
   return (
     <div className={classes.container}>
-      <ConfigTable config={config} setConfig={setConfig} onSave={handleSave} />
+      <ConfigTable config={config} setConfig={setConfig} onSave={handleSave} labels={labels} />
       <div className={classes.imagesContainer}>
-        {list.map((imageData) => {
-          const {
-            imageUrl,
-            FaceDetails = [],
-            TextDetections = [],
-            Labels = [],
-          } = imageData;
-          const focusPoint = getFocusPoint(imageData, config);
+        {parsedList.map(({ imageUrl, items }) => {
+          const focusPoint = getFocusPoint(items, config);
+
           return (
             <div key={imageUrl} className={classes.imageContainer}>
               <img src={imageUrl} className={classes.image} alt="" />
-              {FaceDetails.filter(
-                ({ BoundingBox, Confidence }) =>
-                  getWeighting(BoundingBox, config.FaceDetails?.relativeWeight)
-                    .size >
-                    (config.FaceDetails?.minimalSize || 0) / 100 &&
-                  Confidence > (config.FaceDetails?.minimalConfidence || 0),
-              ).map((face) => (
-                <div
-                  key={JSON.stringify(face)}
-                  title={JSON.stringify(face)}
-                  className={`${classes.boundingBox} red`}
-                  style={{
-                    top: face.BoundingBox.Top * 100 + '%',
-                    left: face.BoundingBox.Left * 100 + '%',
-                    height: face.BoundingBox.Height * 100 + '%',
-                    width: face.BoundingBox.Width * 100 + '%',
-                  }}
-                />
-              ))}
-              {TextDetections.filter(({ ParentId }) => !ParentId)
-                .filter(
-                  ({ Geometry: { BoundingBox }, Confidence }) =>
-                    getWeighting(
-                      BoundingBox,
-                      config.TextDetections?.relativeWeight,
-                    ).size >
-                      (config.TextDetections?.minimalSize || 0) / 100 &&
-                    Confidence >
-                      (config.TextDetections?.minimalConfidence || 0),
-                )
-                .map((text) => (
+              {items.sort((a, b) => b.size - a.size).map((item) => {
+                const { center, disabled, ...rest } = item;
+                const color = disabled
+                  ? 'grey'
+                  : rest.type === 'FaceDetails'
+                  ? 'red'
+                  : rest.type === 'TextDetections'
+                  ? 'blue'
+                  : 'green';
+
+                return (
                   <div
-                    key={text.Id}
-                    title={JSON.stringify(text)}
-                    className={`${classes.boundingBox} blue`}
+                    key={JSON.stringify(rest)}
+                    title={JSON.stringify(rest, null, 2)}
+                    className={`${classes.boundingBox} ${color}`}
                     style={{
-                      top: text.Geometry.BoundingBox.Top * 100 + '%',
-                      left: text.Geometry.BoundingBox.Left * 100 + '%',
-                      height: text.Geometry.BoundingBox.Height * 100 + '%',
-                      width: text.Geometry.BoundingBox.Width * 100 + '%',
+                      top: rest.box.top + '%',
+                      left: rest.box.left + '%',
+                      height: rest.box.height + '%',
+                      width: rest.box.width + '%',
                     }}
                   />
-                ))}
-              {Labels.map(({ Name, Instances = [] }) =>
-                Instances.filter(
-                  ({ BoundingBox, Confidence }) =>
-                    getWeighting(BoundingBox, config.Labels?.relativeWeight)
-                      .size >
-                      (config.Labels?.minimalSize || 0) / 100 &&
-                    Confidence > (config.FaceDetails?.minimalConfidence || 0),
-                ).map((data) => (
-                  <div
-                    key={JSON.stringify(data)}
-                    title={Name + ' ' + JSON.stringify(data)}
-                    className={`${classes.boundingBox} green`}
-                    style={{
-                      top: data.BoundingBox.Top * 100 + '%',
-                      left: data.BoundingBox.Left * 100 + '%',
-                      height: data.BoundingBox.Height * 100 + '%',
-                      width: data.BoundingBox.Width * 100 + '%',
-                    }}
-                  />
-                )),
-              )}
+                );
+              })}
               <div
                 style={{
-                  left: focusPoint.x * 100 + '%',
-                  top: focusPoint.y * 100 + '%',
+                  left: focusPoint.x + '%',
+                  top: focusPoint.y + '%',
                 }}
                 className={classes.focusPoint}
               >

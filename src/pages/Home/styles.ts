@@ -1,7 +1,16 @@
 import { makeStyles } from '@material-ui/core';
 
 export const useStyles = makeStyles(() => ({
-  container: {},
+  container: {
+    paddingTop: 120,
+  },
+  tableContainer: {
+    position: 'fixed',
+    top: 0,
+    zIndex: 1,
+    display: 'flex',
+    background: 'rgba(255, 255, 255, .9)',
+  },
   table: {
     borderCollapse: 'collapse',
     '& td, & th': {
@@ -13,6 +22,9 @@ export const useStyles = makeStyles(() => ({
       width: '100%',
       boxSizing: 'border-box',
     },
+  },
+  labelList: {
+    width: '50%',
   },
   imagesContainer: {
     display: 'flex',
@@ -30,7 +42,7 @@ export const useStyles = makeStyles(() => ({
   },
   boundingBox: {
     position: 'absolute',
-    border: '2px solid rgba(255, 255, 255, 0.69)',
+    border: '1px solid rgba(255, 255, 255, 0.69)',
     borderRadius: '3%',
     '&.red': {
       boxShadow:
@@ -44,6 +56,13 @@ export const useStyles = makeStyles(() => ({
       boxShadow:
         '0 0 2px green, 0 0 2px green, 0 0 2px green, 0 0 2px green, inset 0 0 2px green, inset 0 0 2px green, inset 0 0 2px green, inset 0 0 2px green',
     },
+    '&.grey': {
+      boxShadow:
+        '0 0 2px grey, 0 0 2px grey, 0 0 2px grey, 0 0 2px grey, inset 0 0 2px grey, inset 0 0 2px grey, inset 0 0 2px grey, inset 0 0 2px grey',
+    },
+    '&:hover': {
+      borderWidth: 2,
+    }
   },
   focusPoint: {
     position: 'absolute',

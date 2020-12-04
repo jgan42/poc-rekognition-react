@@ -1,60 +1,123 @@
-import { BoundingBox, Config, ImageData } from './types';
+import { BoundingBox, Config, ImageData, Item } from './types';
 
-export const getWeighting = (
-  { Top, Left, Height, Width }: BoundingBox,
-  relativeWeight: number = 100,
-) => ({
-  x: Left + Width / 2,
-  y: Top + Height / 2,
-  size: (Height * Width * relativeWeight) / 100,
-});
-
-export const getFocusPoint = (
-  { FaceDetails = [], TextDetections = [], Labels = [] }: ImageData,
+const itemMatchesConfig = (
+  { type, size, confidence, box }: Item,
   config: Config,
 ) => {
-  const weights = [
-    ...FaceDetails.filter(
-      ({ Confidence }) =>
-        Confidence > (config.FaceDetails?.minimalConfidence || 0),
-    )
-      .map(({ BoundingBox }) =>
-        getWeighting(BoundingBox, config.FaceDetails?.relativeWeight),
-      )
-      .filter(
-        ({ size }) => size > (config.FaceDetails?.minimalSize || 0) / 100,
-      ),
-    ...TextDetections.filter(
-      ({ ParentId, Confidence }) =>
-        !ParentId &&
-        Confidence > (config.TextDetections?.minimalConfidence || 0),
-    )
-      .map(({ Geometry: { BoundingBox } }) =>
-        getWeighting(BoundingBox, config.TextDetections?.relativeWeight),
-      )
-      .filter(
-        ({ size }) => size > (config.TextDetections?.minimalSize || 0 / 100),
-      ),
-    ...Labels.reduce(
-      (acc, { Instances = [] }) => [
-        ...acc,
-        ...Instances.filter(
-          ({ Confidence }) =>
-            Confidence > (config.FaceDetails?.minimalConfidence || 0),
-        ).map(({ BoundingBox }) =>
-          getWeighting(BoundingBox, config.Labels?.relativeWeight),
-        ),
-      ],
-      [] as ReturnType<typeof getWeighting>[],
-    ).filter(({ size }) => size > (config.Labels?.minimalSize || 0) / 100),
-  ];
+  const typeConfig = config[type];
 
+  switch (type) {
+    case 'FaceDetails':
+      return (
+        !!typeConfig &&
+        size >= typeConfig.minSize &&
+        size <= typeConfig.maxSize &&
+        confidence >= typeConfig.minConfidence
+      );
+    case 'TextDetections':
+      return (
+        !!typeConfig &&
+        box.height >= typeConfig.minSize &&
+        box.height <= typeConfig.maxSize &&
+        confidence >= typeConfig.minConfidence
+      );
+    case 'Labels':
+      return (
+        !!typeConfig &&
+        size >= typeConfig.minSize &&
+        size <= typeConfig.maxSize &&
+        confidence >= typeConfig.minConfidence
+      );
+    default:
+      return true;
+  }
+};
+
+const parseBoundingBox = ({ Width, Height, Left, Top }: BoundingBox) => ({
+  center: {
+    x: (Left + Width / 2) * 100,
+    y: (Top + Height / 2) * 100,
+  },
+  size: Height * Width * 100,
+  box: {
+    top: Top * 100,
+    left: Left * 100,
+    height: Height * 100,
+    width: Width * 100,
+  },
+});
+
+export const parseList = (
+  list: ImageData[],
+  config: Config,
+): { imageUrl: string; items: Item[] }[] =>
+  list.map(
+    ({ imageUrl, FaceDetails = [], TextDetections = [], Labels = [] }) => ({
+      imageUrl,
+      items: [
+        ...FaceDetails.map(({ Confidence, BoundingBox }) => ({
+          type: 'FaceDetails' as const,
+          confidence: Confidence,
+          ...parseBoundingBox(BoundingBox),
+        })),
+        ...TextDetections.filter(({ ParentId }) => ParentId === undefined).map(
+          ({ Confidence, DetectedText, Geometry: { BoundingBox } }) => ({
+            type: 'TextDetections' as const,
+            text: DetectedText,
+            confidence: Confidence,
+            ...parseBoundingBox(BoundingBox),
+          }),
+        ),
+        ...Labels.reduce(
+          (acc, { Confidence, Name, Instances = [] }) => [
+            ...acc,
+            ...Instances.map(({ BoundingBox }) => ({
+              type: 'Labels' as const,
+              name: Name,
+              confidence: Confidence,
+              ...parseBoundingBox(BoundingBox),
+            })),
+          ],
+          [] as Item[],
+        ),
+      ]
+        // TODO change to filter
+        .map((item, _, parsedList) => ({
+          disabled:
+            !itemMatchesConfig(item, config) ||
+            (item.type === 'Labels' &&
+              ((config.Labels?.isFallback &&
+                parsedList.some((e) =>
+                  ['TextDetections', 'FaceDetails'].includes(e.type),
+                )) ||
+                config.Labels?.excluded?.includes(item.name))),
+          ...item,
+        })),
+    }),
+  );
+
+export const getFocusPoint = (items: Item[], config: Config) => {
+  const relativeItems = items
+    // TODO useless when filtered
+    .filter(({ disabled }) => !disabled)
+    .map((item) => {
+      const { relativeWeight = 100 } = config[item.type] || {};
+
+      return {
+        ...item,
+        size: (item.size * relativeWeight) / 100,
+      };
+    });
   return {
     x:
-      weights.reduce((acc, { x, size }) => acc + x * size, 0) /
-      weights.reduce((acc, { size }) => acc + size, 0),
+      relativeItems.reduce(
+        (acc, { center, size }) => acc + center.x * size,
+        0,
+      ) / relativeItems.reduce((acc, { size }) => acc + size, 0),
     y:
-      weights.reduce((acc, { y, size }) => acc + y * size, 0) /
-      weights.reduce((acc, { size }) => acc + size, 0),
+      relativeItems.reduce(
+        (acc, { center, size }) => acc + center.y * size,
+        0,
+      ) / relativeItems.reduce((acc, { size }) => acc + size, 0),
   };
 };
